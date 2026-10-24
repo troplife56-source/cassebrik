@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Casse-Briques Pro - Édition Ultime & Combos</title>
+    <title>Casse-Briques Pro - Édition Légendaire</title>
     <style>
         * {
             box-sizing: border-box;
@@ -86,6 +86,13 @@
         .btn-danger { background: linear-gradient(135deg, #e11d48 0%, #9f1239 100%); }
         .btn-warning { background: linear-gradient(135deg, #d97706 0%, #b45309 100%); }
         .btn-success { background: linear-gradient(135deg, #059669 0%, #047857 100%); }
+        .btn-rec { background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%); animation: pulseRec 1.5s infinite; }
+
+        @keyframes pulseRec {
+            0% { opacity: 1; }
+            50% { opacity: 0.6; }
+            100% { opacity: 1; }
+        }
 
         #modal {
             position: fixed;
@@ -141,7 +148,7 @@
             font-size: 0.85rem;
         }
     </style>
-    <!-- Google tag (gtag.js) -->
+     <!-- Google tag (gtag.js) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-T40JJ2QGKE"></script>
 <script>
   window.dataLayer = window.dataLayer || [];
@@ -166,13 +173,14 @@
         <div class="btn-group">
             <button id="startBtn" class="btn">Jouer</button>
             <button id="pauseBtn" class="btn btn-warning">Pause</button>
+            <button id="recBtn" class="btn btn-secondary">🔴 Enregistrer</button>
             <button id="resetBtn" class="btn btn-danger">Reset</button>
             <button id="scoresBtn" class="btn btn-secondary">Scores</button>
             <button id="soundBtn" class="btn btn-secondary">🔊 Son</button>
         </div>
     </div>
 
-    <!-- Modale unique (Configuration, Fin de partie, Shop inter-niveau) -->
+    <!-- Modale unique -->
     <div id="modal">
         <div class="modal-content">
             <h2 id="modalTitle">CASSE-BRIQUES ULTIME</h2>
@@ -191,8 +199,8 @@
             <!-- Boutique entre les niveaux -->
             <div id="shopSection" style="display:none;">
                 <p id="shopInfo" style="color: #38bdf8; margin-bottom: 10px; font-size: 0.9rem;"></p>
-                <button id="buyLifeBtn" class="btn btn-success" style="width: 100%; margin-bottom: 6px;">❤️ Acheter 1 Vie (500 pts)</button>
-                <button id="buyPaddleBtn" class="btn btn-warning" style="width: 100%; margin-bottom: 10px;">🛡️ Élargir Raquette (300 pts)</button>
+                <button id="buyLifeBtn" class="btn btn-success" style="width: 100%; margin-bottom: 6px;">❤️ Acheter 1 Vie (30 000 pts)</button>
+                <button id="buyPaddleBtn" class="btn btn-warning" style="width: 100%; margin-bottom: 10px;">🛡️ Élargir Raquette (10 000 pts)</button>
                 <button id="nextLevelBtn" class="btn" style="width: 100%;">Niveau Suivant ➔</button>
             </div>
 
@@ -221,6 +229,7 @@
         const highScoreSpan = document.getElementById('highScore');
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
+        const recBtn = document.getElementById('recBtn');
         const resetBtn = document.getElementById('resetBtn');
         const scoresBtn = document.getElementById('scoresBtn');
         const soundBtn = document.getElementById('soundBtn');
@@ -258,7 +267,83 @@
         let combo = 0;
         let comboTimer = 0;
 
-        let floatingTexts = []; // Textes flottants (ex: +100 COMBO!)
+        let floatingTexts = [];
+
+        // Gestion de l'enregistrement vidéo (MediaRecorder)
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+
+        recBtn.addEventListener('click', () => {
+            if (!isRecording) {
+                startRecording(15); // Enregistre 15 secondes par défaut
+            } else {
+                stopRecording();
+            }
+        });
+
+        function startRecording(durationSeconds = 15) {
+            try {
+                const stream = canvas.captureStream(30); // 30 images par seconde
+                recordedChunks = [];
+                
+                let options = { mimeType: 'video/webm;codecs=vp9' };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options = { mimeType: 'video/webm' };
+                }
+
+                mediaRecorder = new MediaRecorder(stream, options);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.style.display = 'none';
+                    a.href = url;
+                    a.download = `casse-briques-replay-${Date.now()}.webm`;
+                    document.body.appendChild(a);
+                    a.click();
+                    setTimeout(() => {
+                        document.body.removeChild(a);
+                        window.URL.revokeObjectURL(url);
+                    }, 100);
+                    recBtn.textContent = "🔴 Enregistrer";
+                    recBtn.className = "btn btn-secondary";
+                    isRecording = false;
+                    alert("Enregistrement terminé ! La vidéo a été téléchargée.");
+                };
+
+                mediaRecorder.start();
+                isRecording = true;
+                recBtn.textContent = `⏹️ Stop (${durationSeconds}s)`;
+                recBtn.className = "btn btn-rec";
+
+                // Arrêt automatique après le nombre de secondes défini
+                setTimeout(() => {
+                    if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                        stopRecording();
+                    }
+                }, durationSeconds * 1000);
+
+            } catch (e) {
+                alert("L'enregistrement vidéo n'est pas supporté par ce navigateur ou nécessite une origine sécurisée (HTTPS/localhost).");
+                isRecording = false;
+                recBtn.textContent = "🔴 Enregistrer";
+                recBtn.className = "btn btn-secondary";
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+            }
+        }
 
         let achievements = JSON.parse(localStorage.getItem('brickGameAchievements')) || {
             fireMaster: false,
@@ -378,7 +463,7 @@
                     if (level >= 3 && r === 0 && (c === 3 || c === 4)) {
                         hitsNeeded = 50;
                     } else if (Math.random() < 0.12 && r > 0) {
-                        isTNT = true; // Brique explosive TNT aléatoire
+                        isTNT = true;
                     } else if (level >= 2 && r === 0) {
                         hitsNeeded = 5;
                     }
@@ -452,7 +537,6 @@
             floatingTexts.push({ text, x, y, alpha: 1, color });
         }
 
-        // Explosion en chaîne des briques TNT
         function explodeTNT(col, row) {
             playSound('explosion');
             screenShake = 15;
@@ -499,13 +583,11 @@
             if (flashEffect > 0) flashEffect--;
             if (portalTimer > 0) portalTimer--;
 
-            // Gestion du compteur de combo
             if (comboTimer > 0) {
                 comboTimer--;
                 if (comboTimer === 0) combo = 0;
             }
 
-            // Mise à jour des textes flottants
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
                 let ft = floatingTexts[i];
                 ft.y -= 1;
@@ -728,7 +810,7 @@
 
                 if (ballLost) {
                     balls.splice(i, 1);
-                    combo = 0; // Réinitialise le combo si la balle tombe
+                    combo = 0;
                 }
             }
 
@@ -758,25 +840,25 @@
         }
 
         buyLifeBtn.addEventListener('click', () => {
-            if (score >= 500) {
-                score -= 500;
+            if (score >= 30000) {
+                score -= 30000;
                 lives++;
                 scoreSpan.textContent = score;
                 livesSpan.textContent = lives;
                 shopInfo.textContent = `Achat réussi ! Score : ${score} pts | Vies : ${lives}`;
             } else {
-                alert("Pas assez de points !");
+                alert("Il faut 30 000 points pour acheter une vie !");
             }
         });
 
         buyPaddleBtn.addEventListener('click', () => {
-            if (score >= 300) {
-                score -= 300;
+            if (score >= 10000) {
+                score -= 10000;
                 paddle.width = Math.min(paddle.width + 30, 200);
                 scoreSpan.textContent = score;
                 shopInfo.textContent = `Raquette élargie ! Score : ${score} pts`;
             } else {
-                alert("Pas assez de points !");
+                alert("Il faut 10 000 points pour élargir la raquette !");
             }
         });
 
@@ -932,7 +1014,7 @@
                         let by = brickOffsetTop + r * (brickHeight + brickPadding);
                         
                         if (brick.tnt) {
-                            ctx.fillStyle = '#f97316'; // Couleur orange/rouge pour les briques TNT
+                            ctx.fillStyle = '#f97316';
                         } else if (brick.hits >= 50) {
                             ctx.fillStyle = '#7f1d1d';
                         } else if (brick.hits >= 5) {
@@ -970,7 +1052,6 @@
                 ctx.restore();
             });
 
-            // Affichage des textes flottants de score / combos
             floatingTexts.forEach(ft => {
                 ctx.save();
                 ctx.globalAlpha = ft.alpha;
