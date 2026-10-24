@@ -308,43 +308,34 @@
 
        function startRecording(durationSeconds = 20) {
             try {
-                const canvasStream = canvas.captureStream(30); // 30 images par seconde
-                let combinedStream = canvasStream;
-
-                // Récupération de l'audio du jeu si l'AudioContext est actif
-                if (audioCtx && audioCtx.destination) {
-                    try {
-                        const destination = audioCtx.createMediaStreamDestination();
-                        destination.stream.getAudioTracks().forEach(track => {
-                            audioCtx.createMediaStreamSource(destination.stream); // Sécurité
-                        });
-                        // On combine les pistes vidéo et audio
-                        if (destination.stream.getAudioTracks().length > 0) {
-                            combinedStream = new MediaStream([
-                                ...canvasStream.getVideoTracks(),
-                                ...destination.stream.getAudioTracks()
-                            ]);
-                        }
-                    } catch (err) {
-                        console.warn("Capture audio non disponible, enregistrement vidéo seul :", err);
+                const stream = canvas.captureStream(30); // 30 images par seconde
+                recordedChunks = [];
+                
+                let options = { mimeType: 'video/webm;codecs=vp9' };
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options = { mimeType: 'video/webm' };
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options = {}; // Utiliser le format par défaut du navigateur si webm n'est pas supporté
                     }
                 }
 
-                recordedChunks = [];
-                let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'video/webm' };
-                }
-
-                mediaRecorder = new MediaRecorder(combinedStream, options);
+                mediaRecorder = new MediaRecorder(stream, options);
 
                 mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
+                    if (event.data && event.data.size > 0) {
                         recordedChunks.push(event.data);
                     }
                 };
 
                 mediaRecorder.onstop = () => {
+                    if (recordedChunks.length === 0) {
+                        alert("Erreur : Aucun flux vidéo n'a pu être capturé.");
+                        recBtn.textContent = "🔴 Enregistrer";
+                        recBtn.className = "btn btn-secondary";
+                        isRecording = false;
+                        return;
+                    }
+
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
                     const a = document.createElement('a');
@@ -357,13 +348,15 @@
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
                     }, 100);
+
                     recBtn.textContent = "🔴 Enregistrer";
                     recBtn.className = "btn btn-secondary";
                     isRecording = false;
-                    alert("Enregistrement de 20 secondes terminé avec audio ! La vidéo a été téléchargée.");
+                    alert("Enregistrement de 20 secondes terminé ! La vidéo a été téléchargée.");
                 };
 
-                mediaRecorder.start();
+                // On démarre en demandant un chunk toutes les 100ms pour stabiliser l'enregistrement
+                mediaRecorder.start(100);
                 isRecording = true;
                 recBtn.textContent = `⏹️ Stop (${durationSeconds}s)`;
                 recBtn.className = "btn btn-rec";
@@ -375,7 +368,8 @@
                 }, durationSeconds * 1000);
 
             } catch (e) {
-                alert("L'enregistrement vidéo avec audio n'est pas supporté par ce navigateur.");
+                console.error(e);
+                alert("L'enregistrement vidéo n'est pas supporté par ce navigateur.");
                 isRecording = false;
                 recBtn.textContent = "🔴 Enregistrer";
                 recBtn.className = "btn btn-secondary";
