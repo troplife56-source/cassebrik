@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Casse-Briques Pro - Mobile</title>
+    <title>Casse-Briques Pro - Arcade Ultime</title>
     <style>
         * {
             box-sizing: border-box;
@@ -90,6 +90,9 @@
         }
         .btn-warning {
             background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+        }
+        .btn-success {
+            background: linear-gradient(135deg, #059669 0%, #047857 100%);
         }
 
         #modal {
@@ -178,7 +181,10 @@
 
             <div id="leaderboardSection">
                 <ul class="high-scores-list" id="scoresList"></ul>
-                <button id="closeModalBtn" class="btn" style="width: 100%; margin-top: 10px;">Fermer</button>
+                <div style="display: flex; gap: 6px; margin-top: 10px;">
+                    <button id="shareScoreBtn" class="btn btn-success" style="display:none;">📤 Partager</button>
+                    <button id="closeModalBtn" class="btn" style="flex:1;">Fermer</button>
+                </div>
             </div>
         </div>
     </div>
@@ -204,6 +210,7 @@
         const playerNameInput = document.getElementById('playerName');
         const saveScoreBtn = document.getElementById('saveScoreBtn');
         const scoresList = document.getElementById('scoresList');
+        const shareScoreBtn = document.getElementById('shareScoreBtn');
         const closeModalBtn = document.getElementById('closeModalBtn');
 
         let score = 0;
@@ -212,6 +219,7 @@
         let gameActive = false;
         let isPaused = false;
         let soundEnabled = true;
+        let screenShake = 0;
 
         let audioCtx = null;
         function playSound(type) {
@@ -253,6 +261,14 @@
                 gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
                 osc.start(now);
                 osc.stop(now + 0.2);
+            } else if (type === 'laser') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.exponentialRampToValueAtTime(200, now + 0.1);
+                gain.gain.setValueAtTime(0.1, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now);
+                osc.stop(now + 0.1);
             } else if (type === 'lose') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(200, now);
@@ -282,7 +298,8 @@
             x: 340,
             y: 560,
             angle: 0,
-            targetAngle: 0
+            targetAngle: 0,
+            laserTimer: 0
         };
 
         let balls = [];
@@ -297,6 +314,7 @@
 
         let particles = [];
         let powerups = [];
+        let lasers = [];
 
         function initLevel() {
             const totalGridWidth = (brickColumnCount * brickWidth) + ((brickColumnCount - 1) * brickPadding);
@@ -317,6 +335,8 @@
                     bricks[c][r] = { x: 0, y: 0, status: 1, hits: hitsNeeded, maxHits: hitsNeeded };
                 }
             }
+            powerups = [];
+            lasers = [];
             resetBalls();
         }
 
@@ -327,13 +347,13 @@
                 radius: 8,
                 dx: 0,
                 dy: 0,
-                launched: false
+                launched: false,
+                fireball: false
             }];
         }
 
         initLevel();
 
-        // Gestion unifiée Souris et Tactile pour bouger la raquette avec le doigt
         function handleMove(clientX) {
             if (isPaused) return;
             const rect = canvas.getBoundingClientRect();
@@ -350,21 +370,9 @@
             });
         }
 
-        canvas.addEventListener('mousemove', (e) => {
-            handleMove(e.clientX);
-        });
-
-        canvas.addEventListener('touchmove', (e) => {
-            if (e.touches.length > 0) {
-                handleMove(e.touches[0].clientX);
-            }
-        }, { passive: true });
-
-        canvas.addEventListener('touchstart', (e) => {
-            if (e.touches.length > 0) {
-                handleMove(e.touches[0].clientX);
-            }
-        }, { passive: true });
+        canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
+        canvas.addEventListener('touchmove', (e) => { if (e.touches.length > 0) handleMove(e.touches[0].clientX); }, { passive: true });
+        canvas.addEventListener('touchstart', (e) => { if (e.touches.length > 0) handleMove(e.touches[0].clientX); }, { passive: true });
 
         canvas.addEventListener('wheel', (e) => {
             if (isPaused) return;
@@ -388,7 +396,7 @@
         }
 
         function spawnPowerup(x, y) {
-            const types = ['multi', 'expand'];
+            const types = ['multi', 'expand', 'fire', 'laser'];
             const type = types[Math.floor(Math.random() * types.length)];
             powerups.push({ x, y, width: 24, height: 24, dy: 2, type });
         }
@@ -396,8 +404,53 @@
         function update() {
             if (!gameActive || isPaused) return;
 
+            if (screenShake > 0) screenShake--;
+
             paddle.angle += (paddle.targetAngle - paddle.angle) * 0.2;
             paddle.targetAngle *= 0.92;
+
+            // Gestion des tirs laser de la raquette
+            if (paddle.laserTimer > 0) {
+                paddle.laserTimer--;
+                if (paddle.laserTimer % 20 === 0) {
+                    lasers.push({ x: paddle.x + 15, y: paddle.y, dy: -8 });
+                    lasers.push({ x: paddle.x + paddle.width - 15, y: paddle.y, dy: -8 });
+                    playSound('laser');
+                }
+            }
+
+            for (let i = lasers.length - 1; i >= 0; i--) {
+                let l = lasers[i];
+                l.y += l.dy;
+                if (l.y < 0) {
+                    lasers.splice(i, 1);
+                    continue;
+                }
+                // Collision laser / briques
+                for (let c = 0; c < brickColumnCount; c++) {
+                    for (let r = 0; r < brickRowCount; r++) {
+                        let brick = bricks[c][r];
+                        if (brick.status === 1) {
+                            let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
+                            let by = brickOffsetTop + r * (brickHeight + brickPadding);
+                            if (l.x > bx && l.x < bx + brickWidth && l.y > by && l.y < by + brickHeight) {
+                                brick.hits--;
+                                lasers.splice(i, 1);
+                                if (brick.hits <= 0) {
+                                    brick.status = 0;
+                                    score += 100 * level;
+                                    scoreSpan.textContent = score;
+                                    createParticles(bx + brickWidth/2, by + brickHeight/2, '#38bdf8');
+                                    playSound('brick');
+                                } else {
+                                    playSound('hit');
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
 
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
@@ -423,6 +476,10 @@
                         balls.push(...extraBalls);
                     } else if (pu.type === 'expand') {
                         paddle.width = Math.min(paddle.width + 30, 180);
+                    } else if (pu.type === 'fire') {
+                        balls.forEach(b => b.fireball = true);
+                    } else if (pu.type === 'laser') {
+                        paddle.laserTimer = 300; // 5 secondes de tirs
                     }
                     powerups.splice(i, 1);
                 } else if (pu.y > canvas.height) {
@@ -464,14 +521,18 @@
                             let by = brickOffsetTop + r * (brickHeight + brickPadding);
 
                             if (b.x > bx && b.x < bx + brickWidth && b.y > by && b.y < by + brickHeight) {
-                                b.dy *= -1;
+                                if (!b.fireball) b.dy *= -1; // La fireball traverse sans rebondir !
                                 brick.hits--;
+
+                                if (brick.hits >= 50) {
+                                    screenShake = 10; // Secousse d'écran sur les forteresses
+                                }
 
                                 if (brick.hits <= 0) {
                                     brick.status = 0;
                                     score += 100 * level * (brick.maxHits > 1 ? brick.maxHits : 1);
                                     scoreSpan.textContent = score;
-                                    createParticles(bx + brickWidth/2, by + brickHeight/2, '#38bdf8');
+                                    createParticles(bx + brickWidth/2, by + brickHeight/2, b.fireball ? '#ef4444' : '#38bdf8');
                                     playSound('brick');
                                     if (Math.random() < 0.25) spawnPowerup(bx + brickWidth/2, by + brickHeight/2);
                                 } else {
@@ -514,6 +575,7 @@
             modalText.textContent = `Score final : ${score} (Niveau ${level})`;
             nameInputSection.style.display = 'block';
             leaderboardSection.style.display = 'none';
+            shareScoreBtn.style.display = 'none';
             playerNameInput.value = '';
             modal.style.display = 'flex';
         }
@@ -523,6 +585,7 @@
             modalText.style.display = 'none';
             nameInputSection.style.display = 'none';
             leaderboardSection.style.display = 'block';
+            shareScoreBtn.style.display = highScores.length > 0 ? 'block' : 'none';
 
             scoresList.innerHTML = '';
             if (highScores.length === 0) {
@@ -549,10 +612,19 @@
             startBtn.textContent = "Jouer";
         });
 
-        scoresBtn.addEventListener('click', showLeaderboardModal);
-        closeModalBtn.addEventListener('click', () => {
-            modal.style.display = 'none';
+        shareScoreBtn.addEventListener('click', () => {
+            const text = `🔥 J'ai atteint le niveau ${level} avec ${score} points sur Casse-Briques Pro ! Peux-tu me battre ? Joue ici : https://troplife56-source.github.io/cassebrik/`;
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(text).then(() => {
+                    alert("Lien et score copiés dans le presse-papier ! Tu peux les coller partout.");
+                });
+            } else {
+                prompt("Copie ton score :", text);
+            }
         });
+
+        scoresBtn.addEventListener('click', showLeaderboardModal);
+        closeModalBtn.addEventListener('click', () => { modal.style.display = 'none'; });
 
         function resetGame() {
             gameActive = false;
@@ -569,10 +641,7 @@
             initLevel();
         }
 
-        resetBtn.addEventListener('click', () => {
-            resetGame();
-        });
-
+        resetBtn.addEventListener('click', () => resetGame());
         pauseBtn.addEventListener('click', () => {
             if (!gameActive) return;
             isPaused = !isPaused;
@@ -580,6 +649,14 @@
         });
 
         function draw() {
+            ctx.save();
+            // Effet de secousse d'écran (Screen Shake)
+            if (screenShake > 0) {
+                let offsetX = (Math.random() - 0.5) * 8;
+                let offsetY = (Math.random() - 0.5) * 8;
+                ctx.translate(offsetX, offsetY);
+            }
+
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
             for (let c = 0; c < brickColumnCount; c++) {
@@ -621,31 +698,37 @@
             });
 
             powerups.forEach(pu => {
-                ctx.fillStyle = pu.type === 'multi' ? '#10b981' : '#f59e0b';
+                ctx.fillStyle = pu.type === 'multi' ? '#10b981' : (pu.type === 'expand' ? '#f59e0b' : (pu.type === 'fire' ? '#ef4444' : '#8b5cf6'));
                 ctx.fillRect(pu.x - pu.width/2, pu.y - pu.height/2, pu.width, pu.height);
                 ctx.fillStyle = '#fff';
-                ctx.font = 'bold 12px sans-serif';
+                ctx.font = 'bold 11px sans-serif';
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
-                ctx.fillText(pu.type === 'multi' ? 'M' : 'E', pu.x, pu.y);
+                ctx.fillText(pu.type === 'multi' ? 'M' : (pu.type === 'expand' ? 'E' : (pu.type === 'fire' ? '🔥' : '⚡')), pu.x, pu.y);
             });
 
+            // Dessin des tirs laser
+            ctx.fillStyle = '#a855f7';
+            lasers.forEach(l => {
+                ctx.fillRect(l.x - 2, l.y, 4, 12);
+            });
+
+            // Raquette (avec effet laser si actif)
             ctx.save();
             ctx.translate(paddle.x + paddle.width / 2, paddle.y + paddle.height / 2);
             ctx.rotate(paddle.angle);
-            ctx.fillStyle = '#38bdf8';
+            ctx.fillStyle = paddle.laserTimer > 0 ? '#a855f7' : '#38bdf8';
             ctx.fillRect(-paddle.width / 2, -paddle.height / 2, paddle.width, paddle.height);
             ctx.restore();
 
             balls.forEach(b => {
-                ctx.fillStyle = '#ffffff';
+                ctx.fillStyle = b.fireball ? '#ef4444' : '#ffffff';
                 ctx.beginPath();
                 ctx.arc(b.x, b.y, b.radius, 0, Math.PI * 2);
                 ctx.fill();
             });
 
             if (isPaused) {
-                ctx.save();
                 ctx.fillStyle = 'rgba(2, 6, 23, 0.75)';
                 ctx.fillRect(0, 0, canvas.width, canvas.height);
                 ctx.fillStyle = '#38bdf8';
@@ -653,8 +736,9 @@
                 ctx.textAlign = 'center';
                 ctx.textBaseline = 'middle';
                 ctx.fillText("PAUSE", canvas.width / 2, canvas.height / 2);
-                ctx.restore();
             }
+
+            ctx.restore();
         }
 
         function loop() {
