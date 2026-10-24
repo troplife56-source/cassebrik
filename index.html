@@ -306,17 +306,14 @@
             }
         });
 
-       function startRecording(durationSeconds = 15) {
+       function startRecording(durationSeconds = 20) {
             try {
-                const stream = canvas.captureStream(30); // 30 images par seconde
+                const stream = canvas.captureStream(30);
                 recordedChunks = [];
                 
-                let options = { mimeType: 'video/webm;codecs=vp9' };
+                let options = { mimeType: 'video/webm' };
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'video/webm' };
-                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                        options = {}; // Utiliser le format par défaut du navigateur si webm n'est pas supporté
-                    }
+                    options = {}; 
                 }
 
                 mediaRecorder = new MediaRecorder(stream, options);
@@ -328,42 +325,36 @@
                 };
 
                 mediaRecorder.onstop = () => {
-                    if (recordedChunks.length === 0) {
-                        alert("Erreur : Aucun flux vidéo n'a pu être capturé.");
-                        recBtn.textContent = "🔴 Enregistrer";
-                        recBtn.className = "btn btn-secondary";
-                        isRecording = false;
-                        return;
-                    }
-
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     const url = URL.createObjectURL(blob);
+                    
+                    // Création directe du lien de téléchargement
                     const a = document.createElement('a');
-                    a.style.display = 'none';
                     a.href = url;
                     a.download = `casse-briques-replay-20s-${Date.now()}.webm`;
                     document.body.appendChild(a);
                     a.click();
+                    
+                    // Nettoyage après un court délai
                     setTimeout(() => {
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
-                    }, 100);
+                    }, 500);
 
                     recBtn.textContent = "🔴 Enregistrer";
                     recBtn.className = "btn btn-secondary";
                     isRecording = false;
-                    alert("Enregistrement de 20 secondes terminé ! La vidéo a été téléchargée.");
                 };
 
-                // On démarre en demandant un chunk toutes les 100ms pour stabiliser l'enregistrement
-                mediaRecorder.start(100);
+                mediaRecorder.start();
                 isRecording = true;
                 recBtn.textContent = `⏹️ Stop (${durationSeconds}s)`;
                 recBtn.className = "btn btn-rec";
 
+                // Arrêt automatique après 20 secondes exactes
                 setTimeout(() => {
                     if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
-                        stopRecording();
+                        mediaRecorder.stop();
                     }
                 }, durationSeconds * 1000);
 
@@ -375,11 +366,12 @@
                 recBtn.className = "btn btn-secondary";
             }
         }
-function stopRecording() {
-    if (mediaRecorder && isRecording) {
-        mediaRecorder.stop();
-    }
-}
+
+        function stopRecording() {
+            if (mediaRecorder && isRecording && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+            }
+        }
 
 let achievements = JSON.parse(localStorage.getItem('brickGameAchievements')) || {
     fireMaster: false,
