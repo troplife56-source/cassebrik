@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Casse-Briques Pro - Édition Légendaire</title>
+    <title>Casse-Briques Ultime - Édition Boss Volant</title>
     <style>
         * {
             box-sizing: border-box;
@@ -50,6 +50,16 @@
         .badge-gold {
             color: #fbbf24;
             border-color: rgba(251, 191, 36, 0.3);
+        }
+        .badge-record-broken {
+            background: #f59e0b;
+            color: #0f172a;
+            animation: pulseRecord 1s infinite;
+        }
+        @keyframes pulseRecord {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
         canvas {
             border: 2px solid #334155;
@@ -148,15 +158,14 @@
             font-size: 0.85rem;
         }
     </style>
-     <!-- Google tag (gtag.js) -->
-<script async src="https://www.googletagmanager.com/gtag/js?id=G-T40JJ2QGKE"></script>
-<script>
-  window.dataLayer = window.dataLayer || [];
-  function gtag(){dataLayer.push(arguments);}
-  gtag('js', new Date());
-
-  gtag('config', 'G-E1VXXHPSZD');
-</script>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-T40JJ2QGKE"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-E1VXXHPSZD');
+    </script>
 </head>
 <body>
 
@@ -165,7 +174,7 @@
             <div class="badge">SCORE: <span id="score">0</span></div>
             <div class="badge">NIVEAU: <span id="level">1</span></div>
             <div class="badge">VIES: <span id="lives">3</span></div>
-            <div class="badge badge-gold">REC: <span id="highScore">0</span></div>
+            <div id="highScoreBadge" class="badge badge-gold">REC: <span id="highScore">0</span></div>
         </div>
         
         <canvas id="gameCanvas" width="800" height="600"></canvas>
@@ -173,7 +182,7 @@
         <div class="btn-group">
             <button id="startBtn" class="btn">Jouer</button>
             <button id="pauseBtn" class="btn btn-warning">Pause</button>
-            <button id="recBtn" class="btn btn-secondary">🔴 Enregistrer</button>
+            <button id="recBtn" class="btn btn-secondary">🔴 REC (30s)</button>
             <button id="resetBtn" class="btn btn-danger">Reset</button>
             <button id="scoresBtn" class="btn btn-secondary">Scores</button>
             <button id="soundBtn" class="btn btn-secondary">🔊 Son</button>
@@ -227,6 +236,7 @@
         const levelSpan = document.getElementById('level');
         const livesSpan = document.getElementById('lives');
         const highScoreSpan = document.getElementById('highScore');
+        const highScoreBadge = document.getElementById('highScoreBadge');
         const startBtn = document.getElementById('startBtn');
         const pauseBtn = document.getElementById('pauseBtn');
         const recBtn = document.getElementById('recBtn');
@@ -269,30 +279,56 @@
 
         let floatingTexts = [];
 
-        // Gestion de l'enregistrement vidéo (MediaRecorder)
+        // Gestion du Boss Volant (tous les 5 niveaux, plus coriace à chaque fois)
+        let isBossLevel = false;
+        let boss = { 
+            x: 300, 
+            y: 70, 
+            width: 220, 
+            height: 50, 
+            dx: 2, 
+            dy: 1, 
+            health: 30, 
+            maxHealth: 30,
+            animTimer: 0 
+        };
+
+        // Gestion de l'enregistrement vidéo 30s avec l'audio du jeu inclus
         let mediaRecorder;
         let recordedChunks = [];
         let isRecording = false;
 
         recBtn.addEventListener('click', () => {
             if (!isRecording) {
-                startRecording(15); // Enregistre 15 secondes par défaut
+                startRecording(30);
             } else {
                 stopRecording();
             }
         });
 
-        function startRecording(durationSeconds = 15) {
+        function startRecording(durationSeconds = 30) {
             try {
-                const stream = canvas.captureStream(30); // 30 images par seconde
+                const canvasStream = canvas.captureStream(30);
+                let combinedStream = canvasStream;
+
+                if (audioCtx && audioCtx.destination) {
+                    const destination = audioCtx.createMediaStreamDestination();
+                    const audioStream = destination.stream;
+                    if (audioStream.getAudioTracks().length > 0) {
+                        combinedStream = new MediaStream([
+                            ...canvasStream.getVideoTracks(),
+                            ...audioStream.getAudioTracks()
+                        ]);
+                    }
+                }
+
                 recordedChunks = [];
-                
-                let options = { mimeType: 'video/webm;codecs=vp9' };
+                let options = { mimeType: 'video/webm;codecs=vp9,opus' };
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options = { mimeType: 'video/webm' };
                 }
 
-                mediaRecorder = new MediaRecorder(stream, options);
+                mediaRecorder = new MediaRecorder(combinedStream, options);
 
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
@@ -306,17 +342,17 @@
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = `casse-briques-replay-${Date.now()}.webm`;
+                    a.download = `casse-briques-replay-30s-${Date.now()}.webm`;
                     document.body.appendChild(a);
                     a.click();
                     setTimeout(() => {
                         document.body.removeChild(a);
                         window.URL.revokeObjectURL(url);
                     }, 100);
-                    recBtn.textContent = "🔴 Enregistrer";
+                    recBtn.textContent = "🔴 REC (30s)";
                     recBtn.className = "btn btn-secondary";
                     isRecording = false;
-                    alert("Enregistrement terminé ! La vidéo a été téléchargée.");
+                    alert("Enregistrement de 30 secondes terminé avec audio ! La vidéo a été téléchargée.");
                 };
 
                 mediaRecorder.start();
@@ -324,7 +360,6 @@
                 recBtn.textContent = `⏹️ Stop (${durationSeconds}s)`;
                 recBtn.className = "btn btn-rec";
 
-                // Arrêt automatique après le nombre de secondes défini
                 setTimeout(() => {
                     if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
                         stopRecording();
@@ -332,9 +367,9 @@
                 }, durationSeconds * 1000);
 
             } catch (e) {
-                alert("L'enregistrement vidéo n'est pas supporté par ce navigateur ou nécessite une origine sécurisée (HTTPS/localhost).");
+                alert("L'enregistrement vidéo avec audio n'est pas supporté par ce navigateur.");
                 isRecording = false;
-                recBtn.textContent = "🔴 Enregistrer";
+                recBtn.textContent = "🔴 REC (30s)";
                 recBtn.className = "btn btn-secondary";
             }
         }
@@ -449,26 +484,46 @@
         let lasers = [];
 
         function initLevel() {
-            const totalGridWidth = (brickColumnCount * brickWidth) + ((brickColumnCount - 1) * brickPadding);
-            brickOffsetLeft = (canvas.width - totalGridWidth) / 2;
-            brickOffsetTop = Math.min(60 + (level - 1) * 18, 170);
+            // Détection du niveau Boss (tous les 5 niveaux : 5, 10, 15...)
+            isBossLevel = (level % 5 === 0);
 
-            bricks = [];
-            for (let c = 0; c < brickColumnCount; c++) {
-                bricks[c] = [];
-                for (let r = 0; r < brickRowCount; r++) {
-                    let hitsNeeded = 1;
-                    let isTNT = false;
+            if (isBossLevel) {
+                bricks = [];
+                let bossHealth = 30 + (level * 10); // Plus le niveau est élevé, plus le boss a de PV !
+                boss = { 
+                    x: canvas.width / 2 - 110, 
+                    y: 70, 
+                    width: 220, 
+                    height: 50, 
+                    dx: (2 + (level * 0.15)) * (Math.random() < 0.5 ? 1 : -1), 
+                    dy: 0.8, 
+                    health: bossHealth, 
+                    maxHealth: bossHealth,
+                    animTimer: 0
+                };
+            } else {
+                const totalGridWidth = (brickColumnCount * brickWidth) + ((brickColumnCount - 1) * brickPadding);
+                brickOffsetLeft = (canvas.width - totalGridWidth) / 2;
+                brickOffsetTop = Math.min(60 + (level - 1) * 18, 170);
 
-                    if (level >= 3 && r === 0 && (c === 3 || c === 4)) {
-                        hitsNeeded = 50;
-                    } else if (Math.random() < 0.12 && r > 0) {
-                        isTNT = true;
-                    } else if (level >= 2 && r === 0) {
-                        hitsNeeded = 5;
+                bricks = [];
+                for (let c = 0; c < brickColumnCount; c++) {
+                    bricks[c] = [];
+                    for (let r = 0; r < brickRowCount; r++) {
+                        let hitsNeeded = 1;
+                        let isTNT = false;
+
+                        // Difficulté progressive des briques selon le niveau
+                        if (level >= 3 && r === 0 && (c === 3 || c === 4)) {
+                            hitsNeeded = Math.min(50 + (level * 5), 100);
+                        } else if (Math.random() < (0.10 + (level * 0.01)) && r > 0) {
+                            isTNT = true;
+                        } else if (level >= 2 && r === 0) {
+                            hitsNeeded = Math.min(5 + level, 15);
+                        }
+
+                        bricks[c][r] = { x: 0, y: 0, status: 1, hits: hitsNeeded, maxHits: hitsNeeded, tnt: isTNT };
                     }
-
-                    bricks[c][r] = { x: 0, y: 0, status: 1, hits: hitsNeeded, maxHits: hitsNeeded, tnt: isTNT };
                 }
             }
             powerups = [];
@@ -588,6 +643,13 @@
                 if (comboTimer === 0) combo = 0;
             }
 
+            let currentHighScore = highScores.length > 0 ? highScores[0].score : 0;
+            if (currentHighScore > 0 && score > currentHighScore) {
+                highScoreBadge.className = "badge badge-record-broken";
+            } else {
+                highScoreBadge.className = "badge badge-gold";
+            }
+
             for (let i = floatingTexts.length - 1; i >= 0; i--) {
                 let ft = floatingTexts[i];
                 ft.y -= 1;
@@ -597,6 +659,22 @@
 
             paddle.angle += (paddle.targetAngle - paddle.angle) * 0.2;
             paddle.targetAngle *= 0.92;
+
+            // Déplacement du Boss Volant (Horizontal + Mouvement vertical de va-et-vient type Mario)
+            if (isBossLevel) {
+                boss.x += boss.dx;
+                boss.y += boss.dy;
+                boss.animTimer += 0.1;
+
+                // Rebond sur les côtés
+                if (boss.x < 20 || boss.x + boss.width > canvas.width - 20) {
+                    boss.dx *= -1;
+                }
+                // Va-et-vient vertical entre la zone haute (50px) et le milieu (150px)
+                if (boss.y < 50 || boss.y > 150) {
+                    boss.dy *= -1;
+                }
+            }
 
             if (paddle.laserTimer > 0) {
                 paddle.laserTimer--;
@@ -614,33 +692,50 @@
                     lasers.splice(i, 1);
                     continue;
                 }
-                for (let c = 0; c < brickColumnCount; c++) {
-                    for (let r = 0; r < brickRowCount; r++) {
-                        let brick = bricks[c][r];
-                        if (brick.status === 1) {
-                            let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
-                            let by = brickOffsetTop + r * (brickHeight + brickPadding);
-                            if (l.x > bx && l.x < bx + brickWidth && l.y > by && l.y < by + brickHeight) {
-                                if (brick.tnt) {
-                                    explodeTNT(c, r);
-                                } else {
-                                    brick.hits--;
-                                    if (brick.hits <= 0) {
-                                        brick.status = 0;
-                                        combo++;
-                                        comboTimer = 180;
-                                        let points = 100 * level * Math.max(1, combo);
-                                        score += points;
-                                        scoreSpan.textContent = score;
-                                        addFloatingText(`+${points} (x${combo})`, bx, by, '#fbbf24');
-                                        createParticles(bx + brickWidth/2, by + brickHeight/2, '#38bdf8');
-                                        playSound('brick');
+
+                if (isBossLevel) {
+                    if (l.x > boss.x && l.x < boss.x + boss.width && l.y > boss.y && l.y < boss.y + boss.height) {
+                        boss.health--;
+                        lasers.splice(i, 1);
+                        playSound('hit');
+                        if (boss.health <= 0) {
+                            score += 5000 * level;
+                            scoreSpan.textContent = score;
+                            gameActive = false;
+                            playSound('levelup');
+                            triggerShopModal();
+                        }
+                        continue;
+                    }
+                } else {
+                    for (let c = 0; c < brickColumnCount; c++) {
+                        for (let r = 0; r < brickRowCount; r++) {
+                            let brick = bricks[c][r];
+                            if (brick.status === 1) {
+                                let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
+                                let by = brickOffsetTop + r * (brickHeight + brickPadding);
+                                if (l.x > bx && l.x < bx + brickWidth && l.y > by && l.y < by + brickHeight) {
+                                    if (brick.tnt) {
+                                        explodeTNT(c, r);
                                     } else {
-                                        playSound('hit');
+                                        brick.hits--;
+                                        if (brick.hits <= 0) {
+                                            brick.status = 0;
+                                            combo++;
+                                            comboTimer = 180;
+                                            let points = 100 * level * Math.max(1, combo);
+                                            score += points;
+                                            scoreSpan.textContent = score;
+                                            addFloatingText(`+${points} (x${combo})`, bx, by, '#fbbf24');
+                                            createParticles(bx + brickWidth/2, by + brickHeight/2, '#38bdf8');
+                                            playSound('brick');
+                                        } else {
+                                            playSound('hit');
+                                        }
                                     }
+                                    lasers.splice(i, 1);
+                                    break;
                                 }
-                                lasers.splice(i, 1);
-                                break;
                             }
                         }
                     }
@@ -740,51 +835,69 @@
                         break;
                     }
 
-                    let collisionDetected = false;
-                    for (let c = 0; c < brickColumnCount; c++) {
-                        for (let r = 0; r < brickRowCount; r++) {
-                            let brick = bricks[c][r];
-                            if (brick.status === 1) {
-                                let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
-                                let by = brickOffsetTop + r * (brickHeight + brickPadding);
+                    // Collision avec le Boss Volant
+                    if (isBossLevel) {
+                        if (b.x > boss.x && b.x < boss.x + boss.width && b.y > boss.y && b.y < boss.y + boss.height) {
+                            if (!b.fireball) b.dy *= -1;
+                            boss.health--;
+                            playSound('hit');
+                            createParticles(b.x, b.y, '#ef4444');
+                            if (boss.health <= 0) {
+                                score += 5000 * level;
+                                scoreSpan.textContent = score;
+                                gameActive = false;
+                                playSound('levelup');
+                                triggerShopModal();
+                                break;
+                            }
+                        }
+                    } else {
+                        let collisionDetected = false;
+                        for (let c = 0; c < brickColumnCount; c++) {
+                            for (let r = 0; r < brickRowCount; r++) {
+                                let brick = bricks[c][r];
+                                if (brick.status === 1) {
+                                    let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
+                                    let by = brickOffsetTop + r * (brickHeight + brickPadding);
 
-                                if (b.x > bx && b.x < bx + brickWidth && b.y > by && b.y < by + brickHeight) {
-                                    if (brick.tnt) {
-                                        explodeTNT(c, r);
-                                    } else {
-                                        if (!b.fireball) b.dy *= -1;
-                                        brick.hits--;
-
-                                        if (brick.hits >= 50) {
-                                            screenShake = 10;
-                                            flashEffect = 5;
-                                            triggerVibration(100);
-                                        }
-
-                                        if (brick.hits <= 0) {
-                                            brick.status = 0;
-                                            combo++;
-                                            comboTimer = 180;
-                                            let points = 100 * level * Math.max(1, combo) * (brick.maxHits > 1 ? brick.maxHits : 1);
-                                            score += points;
-                                            scoreSpan.textContent = score;
-                                            addFloatingText(`+${points} (x${combo})`, bx, by, '#fbbf24');
-                                            createParticles(bx + brickWidth/2, by + brickHeight/2, b.fireball ? '#ef4444' : '#38bdf8');
-                                            playSound('brick');
-                                            if (Math.random() < 0.25) spawnPowerup(bx + brickWidth/2, by + brickHeight/2);
+                                    if (b.x > bx && b.x < bx + brickWidth && b.y > by && b.y < by + brickHeight) {
+                                        if (brick.tnt) {
+                                            explodeTNT(c, r);
                                         } else {
-                                            playSound('hit');
-                                            createParticles(bx + brickWidth/2, by + brickHeight/2, '#f43f5e');
+                                            if (!b.fireball) b.dy *= -1;
+                                            brick.hits--;
+
+                                            if (brick.hits >= 50) {
+                                                screenShake = 10;
+                                                flashEffect = 5;
+                                                triggerVibration(100);
+                                            }
+
+                                            if (brick.hits <= 0) {
+                                                brick.status = 0;
+                                                combo++;
+                                                comboTimer = 180;
+                                                let points = 100 * level * Math.max(1, combo) * (brick.maxHits > 1 ? brick.maxHits : 1);
+                                                score += points;
+                                                scoreSpan.textContent = score;
+                                                addFloatingText(`+${points} (x${combo})`, bx, by, '#fbbf24');
+                                                createParticles(bx + brickWidth/2, by + brickHeight/2, b.fireball ? '#ef4444' : '#38bdf8');
+                                                playSound('brick');
+                                                if (Math.random() < 0.25) spawnPowerup(bx + brickWidth/2, by + brickHeight/2);
+                                            } else {
+                                                playSound('hit');
+                                                createParticles(bx + brickWidth/2, by + brickHeight/2, '#f43f5e');
+                                            }
                                         }
+                                        collisionDetected = true;
+                                        break;
                                     }
-                                    collisionDetected = true;
-                                    break;
                                 }
                             }
+                            if (collisionDetected) break;
                         }
                         if (collisionDetected) break;
                     }
-                    if (collisionDetected) break;
 
                     if (b.y - b.radius > canvas.height) {
                         ballLost = true;
@@ -792,20 +905,22 @@
                     }
                 }
 
-                let levelComplete = true;
-                for (let c = 0; c < brickColumnCount; c++) {
-                    for (let r = 0; r < brickRowCount; r++) {
-                        if (bricks[c][r].status === 1) levelComplete = false;
+                if (!isBossLevel) {
+                    let levelComplete = true;
+                    for (let c = 0; c < brickColumnCount; c++) {
+                        for (let r = 0; r < brickRowCount; r++) {
+                            if (bricks[c][r].status === 1) levelComplete = false;
+                        }
                     }
-                }
 
-                if (levelComplete) {
-                    gameActive = false;
-                    playSound('levelup');
-                    if (lives === 1) achievements.survivor = true;
-                    localStorage.setItem('brickGameAchievements', JSON.stringify(achievements));
-                    triggerShopModal();
-                    break;
+                    if (levelComplete) {
+                        gameActive = false;
+                        playSound('levelup');
+                        if (lives === 1) achievements.survivor = true;
+                        localStorage.setItem('brickGameAchievements', JSON.stringify(achievements));
+                        triggerShopModal();
+                        break;
+                    }
                 }
 
                 if (ballLost) {
@@ -974,8 +1089,10 @@
                     if (!b.launched) {
                         b.launched = true;
                         let speedMultiplier = difficulty === 'hard' ? 1.4 : (difficulty === 'hardcore' ? 1.7 : 1.0);
-                        b.dx = (3 + (level * 0.2)) * speedMultiplier;
-                        b.dy = - ((4 + (level * 0.3)) * speedMultiplier);
+                        // La vitesse globale de la balle augmente à chaque niveau !
+                        let levelSpeedBonus = 1 + ((level - 1) * 0.05);
+                        b.dx = (3 + (level * 0.2)) * speedMultiplier * levelSpeedBonus;
+                        b.dy = - ((4 + (level * 0.3)) * speedMultiplier * levelSpeedBonus);
                     }
                 });
             }
@@ -1006,37 +1123,63 @@
                 ctx.fillRect(canvas.width - 4, canvas.height / 2 - 40, 4, 80);
             }
 
-            for (let c = 0; c < brickColumnCount; c++) {
-                for (let r = 0; r < brickRowCount; r++) {
-                    let brick = bricks[c][r];
-                    if (brick.status === 1) {
-                        let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
-                        let by = brickOffsetTop + r * (brickHeight + brickPadding);
-                        
-                        if (brick.tnt) {
-                            ctx.fillStyle = '#f97316';
-                        } else if (brick.hits >= 50) {
-                            ctx.fillStyle = '#7f1d1d';
-                        } else if (brick.hits >= 5) {
-                            ctx.fillStyle = '#f43f5e';
-                        } else {
-                            ctx.fillStyle = (r % 2 === 0 ? '#0284c7' : '#4f46e5');
-                        }
-                        
-                        ctx.fillRect(bx, by, brickWidth, brickHeight);
+            // Affichage du Boss Volant (style rétro avec yeux menaçants et jauge de vie)
+            if (isBossLevel) {
+                // Corps du boss volant
+                ctx.fillStyle = '#b91c1c';
+                ctx.fillRect(boss.x, boss.y, boss.width, boss.height);
+                ctx.strokeStyle = '#fef08a';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(boss.x, boss.y, boss.width, boss.height);
 
-                        if (brick.tnt) {
-                            ctx.fillStyle = '#ffffff';
-                            ctx.font = 'bold 11px sans-serif';
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText("TNT 💣", bx + brickWidth / 2, by + brickHeight / 2);
-                        } else if (brick.hits > 1) {
-                            ctx.fillStyle = '#ffffff';
-                            ctx.font = 'bold 11px sans-serif';
-                            ctx.textAlign = 'center';
-                            ctx.textBaseline = 'middle';
-                            ctx.fillText(brick.hits, bx + brickWidth / 2, by + brickHeight / 2);
+                // Yeux en colère du boss (style Mario rétro)
+                let eyeOffset = Math.sin(boss.animTimer) * 2;
+                ctx.fillStyle = '#fef08a';
+                ctx.fillRect(boss.x + 35 + eyeOffset, boss.y + 12, 25, 18);
+                ctx.fillRect(boss.x + 160 - eyeOffset, boss.y + 12, 25, 18);
+                ctx.fillStyle = '#000000';
+                ctx.fillRect(boss.x + 45 + eyeOffset, boss.y + 16, 10, 10);
+                ctx.fillRect(boss.x + 170 - eyeOffset, boss.y + 16, 10, 10);
+
+                // Texte et PV du boss
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 12px sans-serif';
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(`⚡ BOSS VOLANT (PV: ${boss.health}/${boss.maxHealth}) ⚡`, boss.x + boss.width / 2, boss.y + boss.height + 15);
+            } else {
+                for (let c = 0; c < brickColumnCount; c++) {
+                    for (let r = 0; r < brickRowCount; r++) {
+                        let brick = bricks[c][r];
+                        if (brick.status === 1) {
+                            let bx = brickOffsetLeft + c * (brickWidth + brickPadding);
+                            let by = brickOffsetTop + r * (brickHeight + brickPadding);
+                            
+                            if (brick.tnt) {
+                                ctx.fillStyle = '#f97316';
+                            } else if (brick.hits >= 50) {
+                                ctx.fillStyle = '#7f1d1d';
+                            } else if (brick.hits >= 5) {
+                                ctx.fillStyle = '#f43f5e';
+                            } else {
+                                ctx.fillStyle = (r % 2 === 0 ? '#0284c7' : '#4f46e5');
+                            }
+                            
+                            ctx.fillRect(bx, by, brickWidth, brickHeight);
+
+                            if (brick.tnt) {
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = 'bold 11px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText("TNT 💣", bx + brickWidth / 2, by + brickHeight / 2);
+                            } else if (brick.hits > 1) {
+                                ctx.fillStyle = '#ffffff';
+                                ctx.font = 'bold 11px sans-serif';
+                                ctx.textAlign = 'center';
+                                ctx.textBaseline = 'middle';
+                                ctx.fillText(brick.hits, bx + brickWidth / 2, by + brickHeight / 2);
+                            }
                         }
                     }
                 }
