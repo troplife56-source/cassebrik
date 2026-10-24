@@ -307,84 +307,84 @@
         });
 
         function startRecording(durationSeconds = 30) {
-            try {
-                const canvasStream = canvas.captureStream(30);
-                let combinedStream = canvasStream;
+    try {
+        const canvasStream = canvas.captureStream(30);
+        let combinedStream = canvasStream;
 
-                if (audioCtx && audioCtx.destination) {
-                    const destination = audioCtx.createMediaStreamDestination();
-                    const audioStream = destination.stream;
-                    if (audioStream.getAudioTracks().length > 0) {
-                        combinedStream = new MediaStream([
-                            ...canvasStream.getVideoTracks(),
-                            ...audioStream.getAudioTracks()
-                        ]);
-                    }
-                }
-
-                recordedChunks = [];
-                let options = { mimeType: 'video/webm;codecs=vp9,opus' };
-                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                    options = { mimeType: 'video/webm' };
-                }
-
-                mediaRecorder = new MediaRecorder(combinedStream, options);
-
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
-
-                mediaRecorder.onstop = () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.style.display = 'none';
-                    a.href = url;
-                    a.download = `casse-briques-replay-30s-${Date.now()}.webm`;
-                    document.body.appendChild(a);
-                    a.click();
-                    setTimeout(() => {
-                        document.body.removeChild(a);
-                        window.URL.revokeObjectURL(url);
-                    }, 100);
-                    recBtn.textContent = "🔴 REC (30s)";
-                    recBtn.className = "btn btn-secondary";
-                    isRecording = false;
-                    alert("Enregistrement de 30 secondes terminé avec audio ! La vidéo a été téléchargée.");
-                };
-
-                mediaRecorder.start();
-                isRecording = true;
-                recBtn.textContent = `⏹️ Stop (${durationSeconds}s)`;
-                recBtn.className = "btn btn-rec";
-
-                setTimeout(() => {
-                    if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
-                        stopRecording();
-                    }
-                }, durationSeconds * 1000);
-
-            } catch (e) {
-                alert("L'enregistrement vidéo avec audio n'est pas supporté par ce navigateur.");
-                isRecording = false;
-                recBtn.textContent = "🔴 REC (30s)";
-                recBtn.className = "btn btn-secondary";
+        if (audioCtx && audioCtx.destination) {
+            const destination = audioCtx.createMediaStreamDestination();
+            const audioStream = destination.stream;
+            if (audioStream.getAudioTracks().length > 0) {
+                combinedStream = new MediaStream([
+                    ...canvasStream.getVideoTracks(),
+                    ...audioStream.getAudioTracks()
+                ]);
             }
         }
 
-        function stopRecording() {
-            if (mediaRecorder && isRecording) {
-                mediaRecorder.stop();
-            }
+        recordedChunks = [];
+        let options = { mimeType: 'video/webm;codecs=vp9,opus' };
+        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+            options = { mimeType: 'video/webm' };
         }
 
-        let achievements = JSON.parse(localStorage.getItem('brickGameAchievements')) || {
-            fireMaster: false,
-            laserSniper: false,
-            survivor: false
+        mediaRecorder = new MediaRecorder(combinedStream, options);
+
+        mediaRecorder.ondataavailable = (event) => {
+            if (event.data.size > 0) {
+                recordedChunks.push(event.data);
+            }
         };
+
+        mediaRecorder.onstop = () => {
+            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.style.display = 'none';
+            a.href = url;
+            a.download = `casse-briques-replay-30s-${Date.now()}.webm`;
+            document.body.appendChild(a);
+            a.click();
+            setTimeout(() => {
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+            }, 100);
+            recBtn.textContent = "🔴 REC (30s)";
+            recBtn.className = "btn btn-secondary";
+            isRecording = false;
+            alert("Enregistrement de 30 secondes terminé avec audio ! La vidéo a été téléchargée.");
+        };
+
+        mediaRecorder.start();
+        isRecording = true;
+        recBtn.textContent = `⏹️ Stop (${durationSeconds}s)`;
+        recBtn.className = "btn btn-rec";
+
+        setTimeout(() => {
+            if (isRecording && mediaRecorder && mediaRecorder.state === 'recording') {
+                stopRecording();
+            }
+        }, durationSeconds * 1000); // <-- Correction ici avec le *
+
+    } catch (e) {
+        alert("L'enregistrement vidéo avec audio n'est pas supporté par ce navigateur.");
+        isRecording = false;
+        recBtn.textContent = "🔴 REC (30s)";
+        recBtn.className = "btn btn-secondary";
+    }
+}
+
+function stopRecording() {
+    if (mediaRecorder && isRecording) {
+        mediaRecorder.stop();
+    }
+}
+
+let achievements = JSON.parse(localStorage.getItem('brickGameAchievements')) || {
+    fireMaster: false,
+    laserSniper: false,
+    survivor: false
+};
 
         function triggerVibration(duration) {
             if (navigator.vibrate) navigator.vibrate(duration);
