@@ -300,23 +300,36 @@
 
         recBtn.addEventListener('click', () => {
             if (!isRecording) {
-                startRecording(30);
+                startRecording(15);
             } else {
                 stopRecording();
             }
         });
 
-       function startRecording(durationSeconds = 20) {
+function startRecording(durationSeconds = 15) {
             try {
-                const stream = canvas.captureStream(30); // 30 images par seconde
+                const canvasStream = canvas.captureStream(30);
+                let combinedStream = canvasStream;
+
+                // Tentative de capture audio
+                if (audioCtx && audioCtx.destination) {
+                    const destination = audioCtx.createMediaStreamDestination();
+                    const audioStream = destination.stream;
+                    if (audioStream.getAudioTracks().length > 0) {
+                        combinedStream = new MediaStream([
+                            ...canvasStream.getVideoTracks(),
+                            ...audioStream.getAudioTracks()
+                        ]);
+                    }
+                }
+
                 recordedChunks = [];
-                
-                let options = { mimeType: 'video/webm;codecs=vp9' };
+                let options = { mimeType: 'video/webm;codecs=vp9,opus' };
                 if (!MediaRecorder.isTypeSupported(options.mimeType)) {
                     options = { mimeType: 'video/webm' };
                 }
 
-                mediaRecorder = new MediaRecorder(stream, options);
+                mediaRecorder = new MediaRecorder(combinedStream, options);
 
                 mediaRecorder.ondataavailable = (event) => {
                     if (event.data.size > 0) {
@@ -330,7 +343,7 @@
                     const a = document.createElement('a');
                     a.style.display = 'none';
                     a.href = url;
-                    a.download = `casse-briques-replay-20s-${Date.now()}.webm`;
+                    a.download = `casse-briques-replay-15s-${Date.now()}.webm`;
                     document.body.appendChild(a);
                     a.click();
                     setTimeout(() => {
@@ -340,7 +353,7 @@
                     recBtn.textContent = "🔴 Enregistrer";
                     recBtn.className = "btn btn-secondary";
                     isRecording = false;
-                    alert("Enregistrement de 20 secondes terminé ! La vidéo a été téléchargée.");
+                    alert("Enregistrement de 15 secondes terminé ! La vidéo a été téléchargée.");
                 };
 
                 mediaRecorder.start();
@@ -355,7 +368,7 @@
                 }, durationSeconds * 1000);
 
             } catch (e) {
-                alert("L'enregistrement vidéo n'est pas supporté par ce navigateur.");
+                alert("L'enregistrement vidéo avec audio n'est pas supporté par ce navigateur.");
                 isRecording = false;
                 recBtn.textContent = "🔴 Enregistrer";
                 recBtn.className = "btn btn-secondary";
